@@ -74,25 +74,6 @@ This allows fast searching without rescanning every time.
 
 ---
 
-## Requirements
-
-- Rust-built binary
-- VS Code installed (`code` command available in PATH)
-
-Enable the VS Code CLI if needed:
-
-```
-Cmd + Shift + P → Shell Command: Install 'code' command in PATH
-```
-
----
-
 ## Repository
 
 https://github.com/yanille/fmr
-
----
-
-## License
-
-MIT
