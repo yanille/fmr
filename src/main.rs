@@ -124,7 +124,7 @@ fn interactive_repo_menu(repos: &Vec<String>) {
 
     let names: Vec<String> = repos.iter().map(|r| repo_name(r)).collect();
 
-    let selection = Select::new()
+    let result = Select::new()
         .with_prompt("Select a repository (Ctrl+C to exit)")
         .items(&names)
         .default(0)
@@ -156,7 +156,7 @@ fn search_and_select(repos: &Vec<String>, query: &str) {
 
     let names: Vec<String> = matches.iter().map(|r| repo_name(r)).collect();
 
-    let selection = Select::new()
+    let result = Select::new()
         .with_prompt("Select a repository (Ctrl+C to exit)")
         .items(&names)
         .default(0)
