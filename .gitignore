@@ -1,0 +1,19 @@
+# Rust build artifacts
+/target/
+
+# Cargo specific
+**/Cargo.lock
+
+# MacOS files
+.DS_Store
+
+# Editor folders
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# OS generated files
+Thumbs.db
