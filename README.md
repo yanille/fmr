@@ -10,7 +10,8 @@
 
 - 🔎 Search your local Git repositories
 - 📂 Open repos directly in **VS Code**
-- ⚡ Cached repo index for fast lookups
+- ⚡ Parallel scanning with cached repo index for fast lookups
+- 📍 Configure multiple scan locations
 - 🔄 `fmr update` to update the CLI
 - ⬇️ `fmr downgrade <version>` to install an older release
 - ♻️ `fmr refresh` to rebuild the repository cache
@@ -61,9 +62,40 @@ This rescans your system and rebuilds the repository index.
 
 ---
 
+## Managing Scan Locations
+
+By default, `fmr` scans your **Desktop directory**. You can configure additional locations:
+
+### List configured locations
+
+```bash
+fmr locations list
+```
+
+### Add a new scan location
+
+```bash
+fmr locations add ~/projects
+fmr locations add ~/work/repos
+```
+
+### Remove a scan location
+
+```bash
+fmr locations remove ~/projects
+```
+
+---
+
 ## How It Works
 
-- `fmr` scans your **Desktop directory** for folders containing `.git`.
+- `fmr` scans configured directories in **parallel** for folders containing `.git`
+- Configuration is stored in:
+
+```
+~/.fmr/config.json
+```
+
 - Repositories are cached in:
 
 ```
