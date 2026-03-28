@@ -27,8 +27,8 @@ enum Commands {
     Update,
 
     /// Downgrade fmr to a specific version
-    Downgrade {
-        version: String,
+    Downgrade { 
+        version: String
     },
 
     /// Rebuild the repo cache
@@ -125,13 +125,17 @@ fn interactive_repo_menu(repos: &Vec<String>) {
     let names: Vec<String> = repos.iter().map(|r| repo_name(r)).collect();
 
     let selection = Select::new()
-        .with_prompt("Select a repository")
+        .with_prompt("Select a repository (Ctrl+C to exit)")
         .items(&names)
         .default(0)
-        .interact()
-        .unwrap();
+        .interact();
 
-    open_repo_in_vscode(&repos[selection]);
+    match result {
+        Ok(selection) => open_repo_in_vscode(&repos[selection]),
+        Err(_) => {
+            println!("\nExiting...");
+        }
+    }
 }
 
 fn search_and_select(repos: &Vec<String>, query: &str) {
@@ -153,13 +157,17 @@ fn search_and_select(repos: &Vec<String>, query: &str) {
     let names: Vec<String> = matches.iter().map(|r| repo_name(r)).collect();
 
     let selection = Select::new()
-        .with_prompt("Select a repository")
+        .with_prompt("Select a repository (Ctrl+C to exit)")
         .items(&names)
         .default(0)
-        .interact()
-        .unwrap();
+        .interact();
 
-    open_repo_in_vscode(matches[selection]);
+    match result {
+        Ok(selection) => open_repo_in_vscode(matches[selection]),
+        Err(_) => {
+            println!("\nExiting...");
+        }
+    }
 }
 
 fn update_fmr() {
