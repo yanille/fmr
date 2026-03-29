@@ -1,10 +1,33 @@
 use crate::cache::{self, cache_path};
 use crate::config::{load_or_create_config, save_config};
-use crate::git::{get_repo_status, pull_repo};
+use crate::git::{branch_exists, checkout_branch, get_repo_status, pull_repo};
 use crate::status_cache;
 use self_update::backends::github::Update;
+use std::env;
 use std::path::Path;
 use std::path::PathBuf;
+
+/// Check if the current directory is a repository in the list
+/// Returns Some(repo_path) if current dir is in the list, None otherwise
+fn get_current_repo(repos: &[String]) -> Option<String> {
+    let current_dir = env::current_dir().ok()?;
+    let canonical_current = current_dir.canonicalize().unwrap_or(current_dir);
+    let current_str = canonical_current.display().to_string();
+
+    // Check if current directory is exactly a repo in the list
+    if repos.contains(&current_str) {
+        return Some(current_str);
+    }
+
+    // Check if current directory is inside any repo (as a subdirectory)
+    for repo in repos {
+        if current_str.starts_with(repo) {
+            return Some(repo.clone());
+        }
+    }
+
+    None
+}
 
 pub fn add_location(path: String) {
     let mut config = load_or_create_config();
@@ -137,76 +160,163 @@ pub fn refresh_all() {
     refresh_status();
 }
 
-pub fn sync_repos(repos: &[String], all: bool, repo_name: Option<String>) {
-    if !all && repo_name.is_none() {
-        println!("Usage: fmr sync --all  OR  fmr sync <repo-name>");
-        return;
-    }
-
+pub fn sync_repos(repos: &[String], all: bool, current: bool) {
     let mut synced = 0;
     let mut skipped_dirty = 0;
     let mut skipped_clean = 0;
 
-    let repos_to_sync: Vec<&String> = if all {
-        repos.iter().collect()
-    } else {
-        let target = repo_name.unwrap();
-        let matches: Vec<_> = repos
-            .iter()
-            .filter(|r| {
-                PathBuf::from(r)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| r.to_string())
-                    .to_lowercase()
-                    .contains(&target.to_lowercase())
-            })
-            .collect();
+    if all {
+        // Sync all repos
+        for repo_path in repos {
+            let (clean, behind, _) = get_repo_status(repo_path);
 
-        if matches.is_empty() {
-            println!("No repository found matching '{}'", target);
-            return;
-        }
-
-        if matches.len() > 1 {
-            println!("Multiple matches found for '{}'", target);
-            for m in &matches {
-                println!("  - {}", m);
+            if !clean {
+                skipped_dirty += 1;
+                println!("⏸️  Skipped (uncommitted changes): {}", repo_path);
+                continue;
             }
-            return;
+
+            if !behind {
+                skipped_clean += 1;
+                continue;
+            }
+
+            print!("🔄 Syncing: {} ... ", repo_path);
+            if pull_repo(repo_path) {
+                synced += 1;
+                println!("✅");
+            } else {
+                println!("❌ Failed");
+            }
         }
 
-        matches
-    };
+        println!();
+        println!("Sync complete:");
+        println!("  ✅ Synced: {}", synced);
+        println!("  ⏸️  Skipped (dirty): {}", skipped_dirty);
+        println!("  ⏭️  Already up-to-date: {}", skipped_clean);
+    } else if current {
+        // Sync only current repository
+        match get_current_repo(repos) {
+            Some(current_repo) => {
+                let (clean, behind, _) = get_repo_status(&current_repo);
 
-    for repo_path in repos_to_sync {
-        let (clean, behind, _) = get_repo_status(repo_path);
+                if !clean {
+                    println!("⏸️  Skipped (uncommitted changes): {}", current_repo);
+                    return;
+                }
 
-        if !clean {
-            skipped_dirty += 1;
-            println!("⏸️  Skipped (uncommitted changes): {}", repo_path);
-            continue;
-        }
+                if !behind {
+                    println!("⏭️  Already up-to-date: {}", current_repo);
+                    return;
+                }
 
-        if !behind {
-            skipped_clean += 1;
-            continue;
-        }
-
-        print!("🔄 Syncing: {} ... ", repo_path);
-        if pull_repo(repo_path) {
-            synced += 1;
-            println!("✅");
-        } else {
-            println!("❌ Failed");
+                print!("🔄 Syncing: {} ... ", current_repo);
+                if pull_repo(&current_repo) {
+                    println!("✅");
+                } else {
+                    println!("❌ Failed");
+                }
+            }
+            None => {
+                println!("Not currently in a tracked repository directory.");
+            }
         }
     }
+}
 
-    println!();
-    println!("Sync complete:");
-    println!("  ✅ Synced: {}", synced);
-    println!("  ⏸️  Skipped (dirty): {}", skipped_dirty);
+pub fn checkout_repos(repos: &[String], all: bool, current: bool, branch: &str) {
+    let mut checked_out = 0;
+    let mut skipped_no_branch = 0;
+    let mut skipped_dirty = 0;
+    let mut skipped_already_on_branch = 0;
+
     if all {
-        println!("  ⏭️  Already up-to-date: {}", skipped_clean);
+        // Checkout in all repos
+        for repo_path in repos {
+            let (clean, _, current_branch) = get_repo_status(repo_path);
+
+            // Check if already on the target branch
+            if let Some(ref current) = current_branch {
+                if current == branch {
+                    skipped_already_on_branch += 1;
+                    continue;
+                }
+            }
+
+            // Check for uncommitted changes
+            if !clean {
+                skipped_dirty += 1;
+                println!("⏸️  Skipped (uncommitted changes): {}", repo_path);
+                continue;
+            }
+
+            // Check if branch exists
+            if !branch_exists(repo_path, branch) {
+                skipped_no_branch += 1;
+                println!("⏸️  Skipped (branch '{}' not found): {}", branch, repo_path);
+                continue;
+            }
+
+            // Perform checkout
+            print!("🔄 Checking out '{}' in: {} ... ", branch, repo_path);
+            if checkout_branch(repo_path, branch) {
+                checked_out += 1;
+                println!("✅");
+            } else {
+                println!("❌ Failed");
+            }
+        }
+
+        println!();
+        println!("Checkout complete:");
+        println!("  ✅ Checked out: {}", checked_out);
+        println!("  ⏸️  Skipped (no branch): {}", skipped_no_branch);
+        println!("  ⏸️  Skipped (dirty): {}", skipped_dirty);
+        println!(
+            "  ⏭️  Already on branch '{}': {}",
+            branch, skipped_already_on_branch
+        );
+    } else if current {
+        // Checkout only in current repository
+        match get_current_repo(repos) {
+            Some(current_repo) => {
+                let (clean, _, current_branch) = get_repo_status(&current_repo);
+
+                // Check if already on the target branch
+                if let Some(ref current) = current_branch {
+                    if current == branch {
+                        println!("⏭️  Already on branch '{}': {}", branch, current_repo);
+                        return;
+                    }
+                }
+
+                // Check for uncommitted changes
+                if !clean {
+                    println!("⏸️  Skipped (uncommitted changes): {}", current_repo);
+                    return;
+                }
+
+                // Check if branch exists
+                if !branch_exists(&current_repo, branch) {
+                    println!(
+                        "⏸️  Skipped (branch '{}' not found): {}",
+                        branch, current_repo
+                    );
+                    return;
+                }
+
+                // Perform checkout
+                print!("🔄 Checking out '{}' in: {} ... ", branch, current_repo);
+                if checkout_branch(&current_repo, branch) {
+                    println!("✅");
+                } else {
+                    println!("❌ Failed");
+                }
+            }
+            None => {
+                println!("Not currently in a tracked repository directory.");
+            }
+        }
     }
 }

@@ -37,13 +37,32 @@ enum Commands {
     Locations(LocationCommands),
 
     /// Sync repositories by pulling latest changes
+    ///
+    /// Usage: fmr sync --all  OR  fmr sync --current
     Sync {
         /// Sync all repositories
         #[arg(long)]
         all: bool,
 
-        /// Repository name to sync
-        repo: Option<String>,
+        /// Sync current repository
+        #[arg(long)]
+        current: bool,
+    },
+
+    /// Checkout a branch in repositories
+    ///
+    /// Usage: fmr checkout --all <branch>  OR  fmr checkout --current <branch>
+    Checkout {
+        /// Checkout in all repositories
+        #[arg(long)]
+        all: bool,
+
+        /// Checkout in current repository
+        #[arg(long)]
+        current: bool,
+
+        /// Branch name to checkout
+        branch: Option<String>,
     },
 }
 
@@ -92,9 +111,31 @@ fn main() {
             LocationCommands::List => commands::list_locations(),
         },
 
-        Some(Commands::Sync { all, repo }) => {
+        Some(Commands::Sync { all, current }) => {
+            if !all && !current {
+                println!("Usage: fmr sync --all  OR  fmr sync --current");
+                return;
+            }
             let repos = cache::load_or_create_cache();
-            commands::sync_repos(&repos, *all, repo.clone());
+            commands::sync_repos(&repos, *all, *current);
+        }
+
+        Some(Commands::Checkout {
+            all,
+            current,
+            branch,
+        }) => {
+            if !all && !current {
+                println!("Usage: fmr checkout --all <branch>  OR  fmr checkout --current <branch>");
+                return;
+            }
+            if branch.is_none() {
+                println!("Usage: fmr checkout --all <branch>  OR  fmr checkout --current <branch>");
+                return;
+            }
+            let repos = cache::load_or_create_cache();
+            let branch_name = branch.clone().unwrap();
+            commands::checkout_repos(&repos, *all, *current, &branch_name);
         }
 
         None => {
