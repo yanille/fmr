@@ -1,5 +1,6 @@
 use crate::git::{is_behind_remote, is_repo_clean};
 use dialoguer::Select;
+use rayon::prelude::*;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -10,7 +11,7 @@ pub fn repo_name(path: &str) -> String {
         .unwrap_or_else(|| path.to_string())
 }
 
-pub fn format_repo_display(path: &str) -> String {
+fn format_repo_with_status(path: &str) -> String {
     let name = repo_name(path);
     let clean = is_repo_clean(path);
     let behind = is_behind_remote(path);
@@ -32,6 +33,10 @@ pub fn format_repo_display(path: &str) -> String {
     format!("{}{}", status_indicator, name)
 }
 
+fn format_repo_simple(path: &str) -> String {
+    repo_name(path)
+}
+
 pub fn open_repo_in_vscode(path: &str) {
     let status = Command::new("code").arg(path).status();
 
@@ -47,7 +52,19 @@ pub fn interactive_repo_menu(repos: &Vec<String>) {
         return;
     }
 
-    let names: Vec<String> = repos.iter().map(|r| format_repo_display(r)).collect();
+    // For large repos list, skip status indicators to maintain performance
+    // Only compute statuses for smaller lists (e.g., < 30 repos)
+    let use_status = repos.len() <= 30;
+
+    let names: Vec<String> = if use_status {
+        // Compute statuses in parallel for better performance
+        repos
+            .par_iter()
+            .map(|r| format_repo_with_status(r))
+            .collect()
+    } else {
+        repos.iter().map(|r| format_repo_simple(r)).collect()
+    };
 
     let result = Select::new()
         .with_prompt("Select a repository (Ctrl+C to exit)")
@@ -79,7 +96,12 @@ pub fn search_and_select(repos: &Vec<String>, query: &str) {
         return;
     }
 
-    let names: Vec<String> = matches.iter().map(|r| format_repo_display(r)).collect();
+    // Search results are typically small, so always show status indicators
+    // Use parallel processing for faster status computation
+    let names: Vec<String> = matches
+        .par_iter()
+        .map(|r| format_repo_with_status(r))
+        .collect();
 
     let result = Select::new()
         .with_prompt("Select a repository (Ctrl+C to exit)")
