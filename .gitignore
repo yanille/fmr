@@ -17,3 +17,6 @@
 
 # OS generated files
 Thumbs.db
+
+# Ignore data generation script
+/data/

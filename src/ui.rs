@@ -13,12 +13,13 @@ pub fn repo_name(path: &str) -> String {
 
 fn format_repo_with_status(path: &str) -> String {
     let name = repo_name(path);
-    let (clean, behind, _branch) = get_repo_status(path);
+    let (clean, behind, branch) = get_repo_status(path);
 
     // ANSI color codes
     let green = "\x1b[32m";
     let orange = "\x1b[33m";
     let red = "\x1b[31m";
+    let cyan = "\x1b[36m";
     let reset = "\x1b[0m";
 
     let status_indicator = if !clean {
@@ -29,7 +30,12 @@ fn format_repo_with_status(path: &str) -> String {
         format!("{}●{} ", green, reset)
     };
 
-    format!("{}{}", status_indicator, name)
+    let branch_str = match branch {
+        Some(b) => format!(" {}[{}]{}", cyan, b, reset),
+        None => String::new(),
+    };
+
+    format!("{}{}{}", status_indicator, name, branch_str)
 }
 
 fn format_repo_simple(path: &str) -> String {
