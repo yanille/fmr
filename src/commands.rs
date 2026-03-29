@@ -1,4 +1,6 @@
+use crate::cache::{self, cache_path};
 use crate::config::{load_or_create_config, save_config};
+use crate::status_cache;
 use self_update::backends::github::Update;
 use std::path::Path;
 use std::path::PathBuf;
@@ -68,7 +70,7 @@ pub fn list_locations() {
     }
 }
 
-pub fn update_fmr() {
+pub fn upgrade_fmr() {
     let status = Update::configure()
         .repo_owner("yanille")
         .repo_name("fmr")
@@ -82,12 +84,12 @@ pub fn update_fmr() {
 
     match status {
         Ok(status) => {
-            println!("✅ Updated to version {}", status.version());
+            println!("✅ Upgraded to version {}", status.version());
         }
         Err(e) => {
-            eprintln!("❌ Update failed: {}", e);
+            eprintln!("❌ Upgrade failed: {}", e);
             eprintln!("If installed in a system directory you may need:");
-            eprintln!("sudo fmr update");
+            eprintln!("sudo fmr upgrade");
         }
     }
 }
@@ -115,4 +117,21 @@ pub fn downgrade_fmr(version: &str) {
             eprintln!("sudo fmr downgrade {}", version);
         }
     }
+}
+
+pub fn refresh_repos() {
+    let repos = cache::scan_repos();
+    let json = serde_json::to_string(&repos).unwrap();
+    std::fs::write(cache_path(), json).unwrap();
+    println!("Indexed {} repositories", repos.len());
+}
+
+pub fn refresh_status() {
+    status_cache::clear_status_cache();
+    println!("Cleared git status cache");
+}
+
+pub fn refresh_all() {
+    refresh_repos();
+    refresh_status();
 }

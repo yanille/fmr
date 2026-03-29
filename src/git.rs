@@ -1,3 +1,4 @@
+use crate::status_cache::{get_cached_status, set_cached_status};
 use std::process::Command;
 
 pub fn get_current_branch(path: &str) -> Option<String> {
@@ -16,7 +17,7 @@ pub fn get_current_branch(path: &str) -> Option<String> {
     }
 }
 
-pub fn is_repo_clean(path: &str) -> bool {
+fn is_repo_clean_raw(path: &str) -> bool {
     let output = Command::new("git")
         .args(["-C", path, "status", "--porcelain"])
         .output();
@@ -29,7 +30,7 @@ pub fn is_repo_clean(path: &str) -> bool {
     }
 }
 
-pub fn is_behind_remote(path: &str) -> bool {
+fn is_behind_remote_raw(path: &str) -> bool {
     let branch = match get_current_branch(path) {
         Some(b) => b,
         None => return false,
@@ -58,4 +59,35 @@ pub fn is_behind_remote(path: &str) -> bool {
         }
         _ => false,
     }
+}
+
+/// Get all git status info with caching support
+/// Returns (clean, behind, branch)
+pub fn get_repo_status(path: &str) -> (bool, bool, Option<String>) {
+    // Check cache first
+    if let Some(cached) = get_cached_status(path) {
+        return (cached.clean, cached.behind, cached.branch);
+    }
+
+    // Cache miss - compute all statuses
+    let clean = is_repo_clean_raw(path);
+    let behind = is_behind_remote_raw(path);
+    let branch = get_current_branch(path);
+
+    // Store in cache
+    set_cached_status(path, clean, behind, branch.clone());
+
+    (clean, behind, branch)
+}
+
+/// Check if repo is clean (cached version)
+#[allow(dead_code)]
+pub fn is_repo_clean(path: &str) -> bool {
+    get_repo_status(path).0
+}
+
+/// Check if repo is behind remote (cached version)
+#[allow(dead_code)]
+pub fn is_behind_remote(path: &str) -> bool {
+    get_repo_status(path).1
 }

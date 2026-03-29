@@ -13,9 +13,10 @@
 - ⚡ Parallel scanning with cached repo index for fast lookups
 - 📍 Configure multiple scan locations
 - 🟢 Visual status indicators (clean, behind remote, uncommitted changes)
-- 🔄 `fmr update` to update the CLI
+- 💾 Git status caching for instant display
+- 🔄 `fmr upgrade` to upgrade the CLI
 - ⬇️ `fmr downgrade <version>` to install an older release
-- ♻️ `fmr refresh` to rebuild the repository cache
+- ♻️ `fmr refresh` to manage caches (repos, status, or both)
 
 ---
 
@@ -46,18 +47,20 @@ When selecting a repository, a colored circle indicates its status:
 - **🟠 Orange** — Repository is behind remote (needs `git pull`)
 - **🔴 Red** — Repository has uncommitted changes
 
+Status information is **cached for 5 minutes** to provide instant display. Use `fmr refresh status` to clear the cache and force fresh git checks.
+
 ---
 
-### Update fmr
+### upgrade fmr
 
 ```bash
-fmr update
+fmr upgrade
 ```
 
 If installed in a system directory you may need:
 
 ```bash
-sudo fmr update
+sudo fmr upgrade
 ```
 
 ---
@@ -70,13 +73,35 @@ fmr downgrade 0.1.0
 
 ---
 
-### Refresh the repo cache
+### Refresh Caches
+
+`fmr` provides three refresh options:
+
+#### Refresh repository list
 
 ```bash
-fmr refresh
+fmr refresh list
+# or
+fmr refresh repos
 ```
 
-This rescans your system and rebuilds the repository index.
+This rescans your configured locations and rebuilds the repository index.
+
+#### Clear git status cache
+
+```bash
+fmr refresh status
+```
+
+Clears the cached git status information, forcing fresh git checks on next display.
+
+#### Refresh everything
+
+```bash
+fmr refresh all
+```
+
+Refreshes both the repository list and clears the status cache.
 
 ---
 
@@ -120,7 +145,13 @@ fmr locations remove ~/projects
 ~/.fmr/repos.json
 ```
 
-This allows fast searching without rescanning every time.
+- Git status information is cached in:
+
+```
+~/.fmr/status_cache.json
+```
+
+This allows fast searching without rescanning every time, and instant status display without repeated git commands.
 
 ---
 

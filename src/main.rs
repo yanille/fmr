@@ -2,6 +2,7 @@ mod cache;
 mod commands;
 mod config;
 mod git;
+mod status_cache;
 mod ui;
 
 use clap::{Parser, Subcommand};
@@ -21,18 +22,32 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Update fmr to the latest version
-    Update,
+    /// Upgrade fmr to the latest version
+    Upgrade,
 
     /// Downgrade fmr to a specific version
     Downgrade { version: String },
 
-    /// Rebuild the repo cache
-    Refresh,
+    /// Refresh caches (repos, status, or all)
+    #[command(subcommand)]
+    Refresh(RefreshCommands),
 
     /// Manage scan locations
     #[command(subcommand)]
     Locations(LocationCommands),
+}
+
+#[derive(Subcommand)]
+enum RefreshCommands {
+    /// Rebuild the repo list cache
+    #[command(alias = "repos")]
+    List,
+
+    /// Clear the git status cache
+    Status,
+
+    /// Refresh both repo list and status cache
+    All,
 }
 
 #[derive(Subcommand)]
@@ -51,16 +66,15 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Some(Commands::Update) => commands::update_fmr(),
+        Some(Commands::Upgrade) => commands::upgrade_fmr(),
 
         Some(Commands::Downgrade { version }) => commands::downgrade_fmr(version),
 
-        Some(Commands::Refresh) => {
-            let repos = cache::scan_repos();
-            let json = serde_json::to_string(&repos).unwrap();
-            std::fs::write(cache::cache_path(), json).unwrap();
-            println!("Indexed {} repositories", repos.len());
-        }
+        Some(Commands::Refresh(cmd)) => match cmd {
+            RefreshCommands::List => commands::refresh_repos(),
+            RefreshCommands::Status => commands::refresh_status(),
+            RefreshCommands::All => commands::refresh_all(),
+        },
 
         Some(Commands::Locations(cmd)) => match cmd {
             LocationCommands::Add { path } => commands::add_location(path.clone()),

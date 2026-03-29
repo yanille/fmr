@@ -1,4 +1,4 @@
-use crate::git::{is_behind_remote, is_repo_clean};
+use crate::git::get_repo_status;
 use dialoguer::Select;
 use rayon::prelude::*;
 use std::path::PathBuf;
@@ -13,8 +13,7 @@ pub fn repo_name(path: &str) -> String {
 
 fn format_repo_with_status(path: &str) -> String {
     let name = repo_name(path);
-    let clean = is_repo_clean(path);
-    let behind = is_behind_remote(path);
+    let (clean, behind, _branch) = get_repo_status(path);
 
     // ANSI color codes
     let green = "\x1b[32m";
