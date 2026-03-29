@@ -102,3 +102,30 @@ pub fn pull_repo(path: &str) -> bool {
         Err(_) => false,
     }
 }
+
+/// Check if a branch exists in the repository
+pub fn branch_exists(path: &str, branch: &str) -> bool {
+    let output = Command::new("git")
+        .args(["-C", path, "branch", "--list", branch])
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            !String::from_utf8_lossy(&output.stdout).trim().is_empty()
+        }
+        _ => false,
+    }
+}
+
+/// Checkout a branch in the repository
+/// Returns true if successful, false otherwise
+pub fn checkout_branch(path: &str, branch: &str) -> bool {
+    let output = Command::new("git")
+        .args(["-C", path, "checkout", branch])
+        .output();
+
+    match output {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
+}

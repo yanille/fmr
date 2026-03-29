@@ -19,6 +19,7 @@
 - ⬇️ `fmr downgrade <version>` to install an older release
 - ♻️ `fmr refresh` to manage caches (repos, status, or both)
 - 🚀 `fmr sync` to pull latest changes across repositories
+- 🔄 `fmr checkout` to switch branches across repositories
 
 ---
 
@@ -132,19 +133,55 @@ Sync complete:
   ⏭️  Already up-to-date: 5
 ```
 
-#### Sync a specific repository
+#### Sync current repository
+
+When you're inside a repository directory:
 
 ```bash
-fmr sync my-repo
+cd ~/projects/my-repo
+fmr sync --current    # Syncs the current repo
 ```
 
-You can use partial name matching:
+---
+
+### Checkout Branches
+
+Switch to a specific branch across your repositories:
+
+#### Checkout branch in all repositories
 
 ```bash
-fmr sync fmr        # Matches "fmr" repository
+fmr checkout --all main
 ```
 
-If multiple repositories match, you'll see a list to choose from.
+This switches all repositories to the **main** branch.
+Repos are skipped if:
+- The branch doesn't exist
+- There are uncommitted changes (🔴)
+- Already on the target branch
+
+**Example output:**
+
+```
+🔄 Checking out 'main' in: /Users/dev/project-a ... ✅
+⏸️  Skipped (branch 'main' not found): /Users/dev/project-b
+⏸️  Skipped (uncommitted changes): /Users/dev/project-c
+
+Checkout complete:
+  ✅ Checked out: 1
+  ⏸️  Skipped (no branch): 1
+  ⏸️  Skipped (dirty): 1
+  ⏭️  Already on branch 'main': 2
+```
+
+#### Checkout branch in current repository
+
+When you're inside a repository directory:
+
+```bash
+cd ~/projects/my-repo
+fmr checkout --current develop    # Checks out 'develop' in the current repo
+```
 
 ---
 
