@@ -13,7 +13,8 @@
 - ⚡ Parallel scanning with cached repo index for fast lookups
 - 📍 Configure multiple scan locations
 - 🟢 Visual status indicators (clean, behind remote, uncommitted changes)
-- 💾 Git status caching for instant display
+- 💾 Memory-mapped git status caching for instant display
+- 🚀 Lazy-loaded cache for optimal performance with large repo lists
 - 🔄 `fmr upgrade` to upgrade the CLI
 - ⬇️ `fmr downgrade <version>` to install an older release
 - ♻️ `fmr refresh` to manage caches (repos, status, or both)
@@ -145,13 +146,18 @@ fmr locations remove ~/projects
 ~/.fmr/repos.json
 ```
 
-- Git status information is cached in:
+- Git status information is cached using a memory-mapped index for O(1) lookups:
 
 ```
-~/.fmr/status_cache.json
+~/.fmr/status_index.bin  # Path → offset mappings (loaded in memory)
+~/.fmr/status_data.bin   # Binary status data (memory-mapped, lazy-loaded)
 ```
 
-This allows fast searching without rescanning every time, and instant status display without repeated git commands.
+This architecture provides:
+- **Fast searching** without rescanning every time
+- **Instant status display** without repeated git commands
+- **Lazy loading** - only reads status data when needed
+- **Memory efficiency** - minimal RAM usage even with thousands of repos
 
 ---
 
