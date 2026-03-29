@@ -12,6 +12,7 @@
 - 📂 Open repos directly in **VS Code**
 - ⚡ Parallel scanning with cached repo index for fast lookups
 - 📍 Configure multiple scan locations
+- 🟢 Visual status indicators (clean, behind remote, uncommitted changes)
 - 🔄 `fmr update` to update the CLI
 - ⬇️ `fmr downgrade <version>` to install an older release
 - ♻️ `fmr refresh` to rebuild the repository cache
@@ -26,7 +27,24 @@ Search for a repository:
 fmr my-repo
 ```
 
-If multiple matches are found, you'll be prompted to select one.
+If multiple matches are found, you'll be prompted to select one:
+
+```
+Select a repository (Ctrl+C to exit):
+  > ● fmr
+    ● my-project
+    ● another-repo
+```
+
+---
+
+### Repository Status Indicators
+
+When selecting a repository, a colored circle indicates its status:
+
+- **🟢 Green** — Repository is clean and up to date
+- **🟠 Orange** — Repository is behind remote (needs `git pull`)
+- **🔴 Red** — Repository has uncommitted changes
 
 ---
 
