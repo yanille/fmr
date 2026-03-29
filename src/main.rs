@@ -35,6 +35,16 @@ enum Commands {
     /// Manage scan locations
     #[command(subcommand)]
     Locations(LocationCommands),
+
+    /// Sync repositories by pulling latest changes
+    Sync {
+        /// Sync all repositories
+        #[arg(long)]
+        all: bool,
+
+        /// Repository name to sync
+        repo: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -81,6 +91,11 @@ fn main() {
             LocationCommands::Remove { path } => commands::remove_location(path.clone()),
             LocationCommands::List => commands::list_locations(),
         },
+
+        Some(Commands::Sync { all, repo }) => {
+            let repos = cache::load_or_create_cache();
+            commands::sync_repos(&repos, *all, repo.clone());
+        }
 
         None => {
             let repos = cache::load_or_create_cache();

@@ -1,5 +1,6 @@
 use crate::cache::{self, cache_path};
 use crate::config::{load_or_create_config, save_config};
+use crate::git::{get_repo_status, pull_repo};
 use crate::status_cache;
 use self_update::backends::github::Update;
 use std::path::Path;
@@ -134,4 +135,78 @@ pub fn refresh_status() {
 pub fn refresh_all() {
     refresh_repos();
     refresh_status();
+}
+
+pub fn sync_repos(repos: &[String], all: bool, repo_name: Option<String>) {
+    if !all && repo_name.is_none() {
+        println!("Usage: fmr sync --all  OR  fmr sync <repo-name>");
+        return;
+    }
+
+    let mut synced = 0;
+    let mut skipped_dirty = 0;
+    let mut skipped_clean = 0;
+
+    let repos_to_sync: Vec<&String> = if all {
+        repos.iter().collect()
+    } else {
+        let target = repo_name.unwrap();
+        let matches: Vec<_> = repos
+            .iter()
+            .filter(|r| {
+                PathBuf::from(r)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| r.to_string())
+                    .to_lowercase()
+                    .contains(&target.to_lowercase())
+            })
+            .collect();
+
+        if matches.is_empty() {
+            println!("No repository found matching '{}'", target);
+            return;
+        }
+
+        if matches.len() > 1 {
+            println!("Multiple matches found for '{}'", target);
+            for m in &matches {
+                println!("  - {}", m);
+            }
+            return;
+        }
+
+        matches
+    };
+
+    for repo_path in repos_to_sync {
+        let (clean, behind, _) = get_repo_status(repo_path);
+
+        if !clean {
+            skipped_dirty += 1;
+            println!("⏸️  Skipped (uncommitted changes): {}", repo_path);
+            continue;
+        }
+
+        if !behind {
+            skipped_clean += 1;
+            continue;
+        }
+
+        print!("🔄 Syncing: {} ... ", repo_path);
+        if pull_repo(repo_path) {
+            synced += 1;
+            println!("✅");
+        } else {
+            println!("❌ Failed");
+        }
+    }
+
+    println!();
+    println!("Sync complete:");
+    println!("  ✅ Synced: {}", synced);
+    println!("  ⏸️  Skipped (dirty): {}", skipped_dirty);
+    if all {
+        println!("  ⏭️  Already up-to-date: {}", skipped_clean);
+    }
 }

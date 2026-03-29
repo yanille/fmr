@@ -18,6 +18,7 @@
 - 🔄 `fmr upgrade` to upgrade the CLI
 - ⬇️ `fmr downgrade <version>` to install an older release
 - ♻️ `fmr refresh` to manage caches (repos, status, or both)
+- 🚀 `fmr sync` to pull latest changes across repositories
 
 ---
 
@@ -103,6 +104,47 @@ fmr refresh all
 ```
 
 Refreshes both the repository list and clears the status cache.
+
+---
+
+### Sync Repositories
+
+Pull latest changes from remote across your repositories:
+
+#### Sync all repositories
+
+```bash
+fmr sync --all
+```
+
+This pulls changes for all repositories that are **behind remote** (🟠).
+Repos with **uncommitted changes** (🔴) are automatically skipped to prevent conflicts.
+
+**Example output:**
+
+```
+🔄 Syncing: /Users/dev/project-a ... ✅
+⏸️  Skipped (uncommitted changes): /Users/dev/project-b
+
+Sync complete:
+  ✅ Synced: 1
+  ⏸️  Skipped (dirty): 1
+  ⏭️  Already up-to-date: 5
+```
+
+#### Sync a specific repository
+
+```bash
+fmr sync my-repo
+```
+
+You can use partial name matching:
+
+```bash
+fmr sync fmr        # Matches "fmr" repository
+```
+
+If multiple repositories match, you'll see a list to choose from.
 
 ---
 

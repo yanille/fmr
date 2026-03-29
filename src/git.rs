@@ -91,3 +91,14 @@ pub fn is_repo_clean(path: &str) -> bool {
 pub fn is_behind_remote(path: &str) -> bool {
     get_repo_status(path).1
 }
+
+/// Pull latest changes from remote
+/// Returns true if successful, false otherwise
+pub fn pull_repo(path: &str) -> bool {
+    let output = Command::new("git").args(["-C", path, "pull"]).output();
+
+    match output {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
+}
