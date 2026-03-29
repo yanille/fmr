@@ -1,3 +1,13 @@
+//! Find My Repo (fmr) - A fast CLI for finding and opening local Git repositories.
+//!
+//! This is the main entry point for the fmr application. It handles:
+//! - CLI argument parsing using clap
+//! - Command routing and dispatch
+//! - Default behavior (search/interactive mode when no subcommand is provided)
+//!
+//! The application uses a cache-based architecture for fast repository lookups
+//! and memory-mapped status caching for optimal performance.
+
 mod cache;
 mod commands;
 mod config;
@@ -5,9 +15,12 @@ mod git;
 mod status_cache;
 mod ui;
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
-/// Find My Repo
+/// Command-line interface for the fmr application.
+///
+/// This struct defines all CLI arguments and subcommands using clap's derive macros.
+/// When no subcommand is provided, fmr enters interactive search mode.
 #[derive(Parser)]
 #[command(name = "fmr", version)]
 #[command(about = "Find My Repo", long_about = None)]
@@ -20,77 +33,130 @@ struct Cli {
     query: Option<String>,
 }
 
+/// Target specification for sync and checkout operations.
+///
+/// This struct uses clap's grouping feature to ensure exactly one of
+/// `--all` or `--current` is specified, providing clear error messages
+/// when neither or both flags are provided.
+#[derive(Args)]
+#[group(required = true, multiple = false)]
+struct SyncTarget {
+    /// Sync/checkout all repositories
+    #[arg(long)]
+    all: bool,
+
+    /// Sync/checkout current repository
+    #[arg(long)]
+    current: bool,
+}
+
+/// Available subcommands for the fmr CLI.
+///
+/// Each variant represents a distinct operation that can be performed
+/// on the repository cache or the fmr installation itself.
 #[derive(Subcommand)]
 enum Commands {
-    /// Upgrade fmr to the latest version
+    /// Upgrade fmr to the latest version from GitHub releases.
+    ///
+    /// Downloads and installs the latest release automatically.
+    /// May require sudo if installed in a system directory.
     Upgrade,
 
-    /// Downgrade fmr to a specific version
-    Downgrade { version: String },
+    /// Downgrade fmr to a specific version.
+    ///
+    /// Allows installing an older release by specifying the version number.
+    /// Example: `fmr downgrade 0.1.0`
+    Downgrade {
+        /// Version string in format "x.y.z"
+        version: String,
+    },
 
-    /// Refresh caches (repos, status, or all)
+    /// Refresh caches (repos, status, or all).
+    ///
+    /// Repos cache rescans configured locations.
+    /// Status cache clears git status information.
+    /// All performs both operations.
     #[command(subcommand)]
     Refresh(RefreshCommands),
 
-    /// Manage scan locations
+    /// Manage scan locations.
+    ///
+    /// Add, remove, or list directories that fmr will scan for repositories.
     #[command(subcommand)]
     Locations(LocationCommands),
 
-    /// Sync repositories by pulling latest changes
+    /// Sync repositories by pulling latest changes from remote.
     ///
-    /// Usage: fmr sync --all  OR  fmr sync --current
+    /// Only syncs repositories that are behind remote (clean repositories only).
+    /// Repositories with uncommitted changes are automatically skipped.
     Sync {
-        /// Sync all repositories
-        #[arg(long)]
-        all: bool,
-
-        /// Sync current repository
-        #[arg(long)]
-        current: bool,
+        #[command(flatten)]
+        target: SyncTarget,
     },
 
-    /// Checkout a branch in repositories
+    /// Checkout a branch across repositories.
     ///
-    /// Usage: fmr checkout --all <branch>  OR  fmr checkout --current <branch>
+    /// Attempts to switch to the specified branch in all repositories.
+    /// Skips repositories where the branch doesn't exist or has uncommitted changes.
     Checkout {
-        /// Checkout in all repositories
-        #[arg(long)]
-        all: bool,
+        #[command(flatten)]
+        target: SyncTarget,
 
-        /// Checkout in current repository
-        #[arg(long)]
-        current: bool,
-
-        /// Branch name to checkout
-        branch: Option<String>,
+        /// Branch name to checkout (e.g., "main", "develop")
+        branch: String,
     },
 }
 
 #[derive(Subcommand)]
 enum RefreshCommands {
-    /// Rebuild the repo list cache
+    /// Rebuild the repository list cache.
+    ///
+    /// Rescans all configured locations and rebuilds the index.
+    /// Alias: `repos`
     #[command(alias = "repos")]
     List,
 
-    /// Clear the git status cache
+    /// Clear the git status cache.
+    ///
+    /// Forces fresh git status checks on next display.
+    /// Status cache has a 5-minute TTL by default.
     Status,
 
-    /// Refresh both repo list and status cache
+    /// Refresh both repository list and status cache.
+    ///
+    /// Equivalent to running both `refresh list` and `refresh status`.
     All,
 }
 
 #[derive(Subcommand)]
 enum LocationCommands {
-    /// Add a new location to scan
-    Add { path: String },
+    /// Add a new directory to scan for repositories.
+    ///
+    /// The path must exist and be a directory.
+    /// Duplicate locations are automatically ignored.
+    Add {
+        /// Absolute or relative path to the directory
+        path: String,
+    },
 
-    /// Remove a location from scanning
-    Remove { path: String },
+    /// Remove a directory from the scan locations.
+    ///
+    /// The path is matched against configured locations.
+    Remove {
+        /// Path as previously added (will be canonicalized)
+        path: String,
+    },
 
-    /// List all configured scan locations
+    /// List all configured scan locations.
+    ///
+    /// Shows each location with an indicator of whether it exists.
     List,
 }
 
+/// Main entry point for the fmr application.
+///
+/// Parses CLI arguments and dispatches to appropriate command handlers.
+/// When no subcommand is provided, enters interactive search mode.
 fn main() {
     let cli = Cli::parse();
 
@@ -111,31 +177,14 @@ fn main() {
             LocationCommands::List => commands::list_locations(),
         },
 
-        Some(Commands::Sync { all, current }) => {
-            if !all && !current {
-                println!("Usage: fmr sync --all  OR  fmr sync --current");
-                return;
-            }
+        Some(Commands::Sync { target }) => {
             let repos = cache::load_or_create_cache();
-            commands::sync_repos(&repos, *all, *current);
+            commands::sync_repos(&repos, target.all, target.current);
         }
 
-        Some(Commands::Checkout {
-            all,
-            current,
-            branch,
-        }) => {
-            if !all && !current {
-                println!("Usage: fmr checkout --all <branch>  OR  fmr checkout --current <branch>");
-                return;
-            }
-            if branch.is_none() {
-                println!("Usage: fmr checkout --all <branch>  OR  fmr checkout --current <branch>");
-                return;
-            }
+        Some(Commands::Checkout { target, branch }) => {
             let repos = cache::load_or_create_cache();
-            let branch_name = branch.clone().unwrap();
-            commands::checkout_repos(&repos, *all, *current, &branch_name);
+            commands::checkout_repos(&repos, target.all, target.current, &branch);
         }
 
         None => {
