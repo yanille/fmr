@@ -313,6 +313,9 @@ pub fn sync_repos(repos: &[String], all: bool, current: bool) {
     let mut skipped_dirty = 0;
     let mut skipped_clean = 0;
 
+    // Clear cache to ensure fresh git status checks
+    clear_status_cache();
+
     if all {
         // Sync all repos
         for repo_path in repos {
