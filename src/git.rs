@@ -1,7 +1,7 @@
 //! Git operations and status checking.
 //!
 //! This module provides functions for interacting with Git repositories,
-//! including checking repository status, pulling changes, and switching branches.
+//! including checking repository status.
 //!
 //! All functions use the `git` command-line tool via `std::process::Command`.
 //! Status information is cached using the `status_cache` module to improve
@@ -162,99 +162,4 @@ pub fn get_repo_status(path: &str) -> (bool, bool, Option<String>) {
     set_cached_status(path, clean, behind, branch.clone());
 
     (clean, behind, branch)
-}
-
-/// Pulls latest changes from the remote repository.
-///
-/// Runs `git pull` in the specified repository.
-///
-/// # Arguments
-/// * `path` - Absolute path to the Git repository
-///
-/// # Returns
-/// * `true` - Pull completed successfully
-/// * `false` - Pull failed or git command error
-///
-/// # Note
-/// This function does not check for uncommitted changes or merge conflicts.
-/// Repositories should be checked as clean before calling this.
-pub fn pull_repo(path: &str) -> bool {
-    let output = Command::new("git").args(["-C", path, "pull"]).output();
-
-    match output {
-        Ok(output) => output.status.success(),
-        Err(_) => false,
-    }
-}
-
-/// Fetches latest changes from the remote repository without merging.
-///
-/// Runs `git fetch` in the specified repository to update remote-tracking branches.
-///
-/// # Arguments
-/// * `path` - Absolute path to the Git repository
-///
-/// # Returns
-/// * `true` - Fetch completed successfully
-/// * `false` - Fetch failed or git command error
-pub fn fetch_repo(path: &str) -> bool {
-    let output = Command::new("git").args(["-C", path, "fetch"]).output();
-
-    match output {
-        Ok(output) => output.status.success(),
-        Err(_) => false,
-    }
-}
-
-/// Checks if a specific branch exists in the repository.
-///
-/// Runs `git branch --list <branch>` to check for branch existence.
-///
-/// # Arguments
-/// * `path` - Absolute path to the Git repository
-/// * `branch` - Name of the branch to check
-///
-/// # Returns
-/// * `true` - Branch exists in the repository
-/// * `false` - Branch does not exist or check failed
-///
-/// # Note
-/// This checks for local branches only, not remote-tracking branches.
-pub fn branch_exists(path: &str, branch: &str) -> bool {
-    let output = Command::new("git")
-        .args(["-C", path, "branch", "--list", branch])
-        .output();
-
-    match output {
-        Ok(output) if output.status.success() => {
-            !String::from_utf8_lossy(&output.stdout).trim().is_empty()
-        }
-        _ => false,
-    }
-}
-
-/// Switches to a specified branch in the repository.
-///
-/// Runs `git checkout <branch>` in the specified repository.
-///
-/// # Arguments
-/// * `path` - Absolute path to the Git repository
-/// * `branch` - Name of the branch to checkout
-///
-/// # Returns
-/// * `true` - Checkout completed successfully
-/// * `false` - Checkout failed (branch doesn't exist, uncommitted changes, etc.)
-///
-/// # Note
-/// This function does not verify the branch exists first. Call `branch_exists()`
-/// if you need to check before attempting checkout.
-pub fn checkout_branch(path: &str, branch: &str) -> bool {
-    let output = Command::new("git")
-        .args(["-C", path, "checkout", branch])
-        .output();
-
-    match output {
-        Ok(output) => output.status.success(),
-        Err(_) => false,
-    }
 }
