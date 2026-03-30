@@ -11,7 +11,9 @@
 
 use crate::cache::{self, cache_path};
 use crate::config::{load_or_create_config, save_config};
-use crate::git::{branch_exists, checkout_branch, get_current_branch, get_repo_status, pull_repo};
+use crate::git::{
+    branch_exists, checkout_branch, fetch_repo, get_current_branch, get_repo_status, pull_repo,
+};
 use crate::status_cache::{clear_status_cache, set_cached_status};
 use self_update::backends::github::Update;
 use std::env;
@@ -319,6 +321,9 @@ pub fn sync_repos(repos: &[String], all: bool, current: bool) {
     if all {
         // Sync all repos
         for repo_path in repos {
+            // Fetch latest remote info first
+            fetch_repo(repo_path);
+
             let (clean, behind, _) = get_repo_status(repo_path);
 
             // Skip repositories with uncommitted changes
@@ -357,6 +362,9 @@ pub fn sync_repos(repos: &[String], all: bool, current: bool) {
         // Sync only current repository
         match get_current_repo(repos) {
             Some(current_repo) => {
+                // Fetch latest remote info first
+                fetch_repo(&current_repo);
+
                 let (clean, behind, _) = get_repo_status(&current_repo);
 
                 if !clean {
