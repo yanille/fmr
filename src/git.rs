@@ -187,6 +187,25 @@ pub fn pull_repo(path: &str) -> bool {
     }
 }
 
+/// Fetches latest changes from the remote repository without merging.
+///
+/// Runs `git fetch` in the specified repository to update remote-tracking branches.
+///
+/// # Arguments
+/// * `path` - Absolute path to the Git repository
+///
+/// # Returns
+/// * `true` - Fetch completed successfully
+/// * `false` - Fetch failed or git command error
+pub fn fetch_repo(path: &str) -> bool {
+    let output = Command::new("git").args(["-C", path, "fetch"]).output();
+
+    match output {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
+}
+
 /// Checks if a specific branch exists in the repository.
 ///
 /// Runs `git branch --list <branch>` to check for branch existence.
