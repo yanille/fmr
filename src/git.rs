@@ -100,10 +100,11 @@ fn is_behind_remote_raw(path: &str) -> bool {
 
     match output {
         Ok(output) if output.status.success() => {
-            // Parse output: "behind\tahead"
+            // Parse output: "ahead\tbehind" (left=local commits not in origin, right=origin commits not in local)
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Some(tab_pos) = stdout.find('\t') {
-                let behind = &stdout[..tab_pos];
+                // Right side (after tab) shows commits in origin but not in local = behind count
+                let behind = &stdout[tab_pos + 1..];
                 behind.trim() != "0"
             } else {
                 eprintln!(
