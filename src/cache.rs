@@ -1,8 +1,8 @@
 //! Repository cache management.
 //!
 //! This module handles scanning for Git repositories and maintaining a cache
-//! of discovered repositories for fast lookups. The cache is stored as JSON
-//! in `~/.fmr/repos.json`.
+//! of discovered repositories for fast lookups. The cache is stored as binary
+//! in `~/.fmr/repos.bin` using bincode for efficient serialization.
 //!
 //! The scanning process:
 //! 1. Reads configured scan locations from config
@@ -21,10 +21,10 @@ use walkdir::WalkDir;
 
 /// Returns the path to the repository cache file.
 ///
-/// The cache is stored at `~/.fmr/repos.json`.
+/// The cache is stored at `~/.fmr/repos.bin`.
 pub fn cache_path() -> PathBuf {
     let mut path = fmr_dir();
-    path.push("repos.json");
+    path.push("repos.bin");
     path
 }
 
@@ -81,8 +81,8 @@ pub fn scan_repos() -> Vec<String> {
 
 /// Loads the repository cache from disk, or rebuilds it if missing/invalid.
 ///
-/// Attempts to read and parse the cache file. If the cache doesn't exist,
-/// is empty, or contains invalid JSON, triggers a rebuild.
+/// Attempts to read and parse the cache file using binary deserialization.
+/// If the cache doesn't exist, is empty, or contains invalid data, triggers a rebuild.
 ///
 /// # Returns
 /// A vector of repository paths, either from cache or freshly scanned.
@@ -93,15 +93,15 @@ pub fn load_or_create_cache() -> Vec<String> {
     let cache = cache_path();
 
     if cache.exists() {
-        let data = fs::read_to_string(&cache).unwrap_or_default();
+        let data = fs::read(&cache).unwrap_or_default();
 
         // Empty cache file needs rebuilding
-        if data.trim().is_empty() {
+        if data.is_empty() {
             return rebuild_cache(cache);
         }
 
-        // Parse JSON or rebuild on error
-        match serde_json::from_str(&data) {
+        // Parse binary data or rebuild on error
+        match bincode::deserialize(&data) {
             Ok(repos) => repos,
             Err(_) => rebuild_cache(cache),
         }
@@ -114,7 +114,8 @@ pub fn load_or_create_cache() -> Vec<String> {
 /// Rebuilds the repository cache by scanning and saving results.
 ///
 /// Performs a fresh scan of all configured locations and writes the
-/// results to the cache file. Displays progress information to stdout.
+/// results to the cache file using binary serialization. Displays progress
+/// information to stdout.
 ///
 /// # Arguments
 /// * `cache` - Path to the cache file
@@ -123,14 +124,14 @@ pub fn load_or_create_cache() -> Vec<String> {
 /// The vector of discovered repository paths.
 ///
 /// # Panics
-/// Panics if JSON serialization or file write fails.
+/// Panics if bincode serialization or file write fails.
 pub fn rebuild_cache(cache: PathBuf) -> Vec<String> {
     println!("Building repo cache...\n");
 
     let repos = scan_repos();
-    let json = serde_json::to_string(&repos).unwrap();
+    let encoded = bincode::serialize(&repos).unwrap();
 
-    fs::write(cache, json).unwrap();
+    fs::write(cache, encoded).unwrap();
 
     println!("Indexed {} repositories\n", repos.len());
     repos

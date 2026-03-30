@@ -66,6 +66,28 @@ fn is_repo_clean_raw(path: &str) -> bool {
     }
 }
 
+/// Checks if a remote named "origin" exists for the repository.
+///
+/// Runs `git remote` and checks if "origin" is in the output.
+///
+/// # Arguments
+/// * `path` - Absolute path to the Git repository
+///
+/// # Returns
+/// * `true` - Origin remote exists
+/// * `false` - No origin remote or check failed
+fn has_remote_origin(path: &str) -> bool {
+    let output = Command::new("git").args(["-C", path, "remote"]).output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let remotes = String::from_utf8_lossy(&output.stdout);
+            remotes.lines().any(|line| line.trim() == "origin")
+        }
+        _ => false,
+    }
+}
+
 /// Checks if the local branch is behind its remote tracking branch.
 ///
 /// Uses `git rev-list --left-right --count` to compare local and remote.
@@ -76,8 +98,13 @@ fn is_repo_clean_raw(path: &str) -> bool {
 ///
 /// # Returns
 /// * `true` - Local branch is behind remote (needs pull)
-/// * `false` - Up to date, ahead of remote, or check failed
+/// * `false` - Up to date, ahead of remote, no remote configured, or check failed
 fn is_behind_remote_raw(path: &str) -> bool {
+    // Check if origin remote exists first
+    if !has_remote_origin(path) {
+        return false; // No remote means can't be behind
+    }
+
     let branch = match get_current_branch(path) {
         Some(b) => b,
         None => {
