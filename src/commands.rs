@@ -11,8 +11,8 @@
 
 use crate::cache::{self, cache_path};
 use crate::config::{load_or_create_config, save_config};
-use crate::git::{branch_exists, checkout_branch, get_repo_status, pull_repo};
-use crate::status_cache;
+use crate::git::{branch_exists, checkout_branch, get_current_branch, get_repo_status, pull_repo};
+use crate::status_cache::{clear_status_cache, set_cached_status};
 use self_update::backends::github::Update;
 use std::env;
 use std::path::Path;
@@ -265,7 +265,7 @@ pub fn refresh_repos() {
 /// # Output
 /// Prints confirmation message to stdout.
 pub fn refresh_status() {
-    status_cache::clear_status_cache();
+    clear_status_cache();
     println!("Cleared git status cache");
 }
 
@@ -336,6 +336,9 @@ pub fn sync_repos(repos: &[String], all: bool, current: bool) {
             if pull_repo(repo_path) {
                 synced += 1;
                 println!("✅");
+                // Update cache: now clean and up-to-date
+                let branch = get_current_branch(repo_path);
+                set_cached_status(repo_path, true, false, branch);
             } else {
                 println!("❌ Failed");
             }
@@ -366,6 +369,9 @@ pub fn sync_repos(repos: &[String], all: bool, current: bool) {
                 print!("🔄 Syncing: {} ... ", current_repo);
                 if pull_repo(&current_repo) {
                     println!("✅");
+                    // Update cache: now clean and up-to-date
+                    let branch = get_current_branch(&current_repo);
+                    set_cached_status(&current_repo, true, false, branch);
                 } else {
                     println!("❌ Failed");
                 }
@@ -454,6 +460,8 @@ pub fn checkout_repos(repos: &[String], all: bool, current: bool, branch: &str) 
             if checkout_branch(repo_path, branch) {
                 checked_out += 1;
                 println!("✅");
+                // Update cache with new branch, assume clean (we checked) and not behind (optimistic)
+                set_cached_status(repo_path, true, false, Some(branch.to_string()));
             } else {
                 println!("❌ Failed");
             }
@@ -502,6 +510,8 @@ pub fn checkout_repos(repos: &[String], all: bool, current: bool, branch: &str) 
                 print!("🔄 Checking out '{}' in: {} ... ", branch, current_repo);
                 if checkout_branch(&current_repo, branch) {
                     println!("✅");
+                    // Update cache with new branch, assume clean (we checked) and not behind (optimistic)
+                    set_cached_status(&current_repo, true, false, Some(branch.to_string()));
                 } else {
                     println!("❌ Failed");
                 }
