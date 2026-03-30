@@ -143,14 +143,14 @@ fmr locations remove ~/projects
 - Repositories are cached in:
 
 ```
-~/.fmr/repos.json
+~/.fmr/repos.bin  # Binary format for fast loading
 ```
 
-- Git status information is cached using a memory-mapped index for O(1) lookups:
+- Git status information is cached using a two-file architecture for O(1) lookups:
 
 ```
-~/.fmr/status_index.bin  # Path → offset mappings (loaded in memory)
-~/.fmr/status_data.bin   # Binary status data (memory-mapped, lazy-loaded)
+~/.fmr/status_lookup.bin   # Path → offset mappings (loaded in memory)
+~/.fmr/status_entries.bin  # Binary status data (memory-mapped, lazy-loaded)
 ```
 
 This architecture provides:
