@@ -11,14 +11,14 @@
 
 use crate::cache::{self, cache_path};
 use crate::config::{load_or_create_config, save_config};
-use crate::git::{
-    branch_exists, checkout_branch, fetch_repo, get_current_branch, get_repo_status, pull_repo,
-};
+use crate::git::{branch_exists, checkout_branch, fetch_repo, get_repo_status, pull_repo};
 use crate::status_cache::{clear_status_cache, set_cached_status};
+use rayon::prelude::*;
 use self_update::backends::github::Update;
 use std::env;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 /// Determines if the current working directory is within a tracked repository.
 ///
@@ -311,61 +311,76 @@ pub fn refresh_all() {
 /// # Safety
 /// Only operates on clean repositories to avoid merge conflicts.
 pub fn sync_repos(repos: &[String], all: bool, current: bool) {
-    let mut synced = 0;
-    let mut skipped_dirty = 0;
-    let mut skipped_clean = 0;
-
-    // Clear cache to ensure fresh git status checks
-    clear_status_cache();
-
     if all {
-        // Sync all repos
-        for repo_path in repos {
-            // Fetch latest remote info first
+        // Parallel sync all repos
+        // Step 1: Parallel fetch all repos first (network I/O)
+        repos.par_iter().for_each(|repo_path| {
             fetch_repo(repo_path);
+        });
 
-            let (clean, behind, _) = get_repo_status(repo_path);
+        // Step 2: Parallel status check and pull (compute + network I/O)
+        let synced = Mutex::new(0);
+        let skipped_dirty = Mutex::new(0);
+        let skipped_clean = Mutex::new(0);
+        let results: Vec<(String, String)> = repos
+            .par_iter()
+            .map(|repo_path| {
+                let (clean, behind, branch) = get_repo_status(repo_path);
 
-            // Skip repositories with uncommitted changes
-            if !clean {
-                skipped_dirty += 1;
-                println!("⏸️  Skipped (uncommitted changes): {}", repo_path);
-                continue;
-            }
+                // Skip repositories with uncommitted changes
+                if !clean {
+                    *skipped_dirty.lock().unwrap() += 1;
+                    return (
+                        repo_path.clone(),
+                        format!("⏸️  Skipped (uncommitted changes): {}", repo_path),
+                    );
+                }
 
-            // Skip repositories already up-to-date
-            if !behind {
-                skipped_clean += 1;
-                continue;
-            }
+                // Skip repositories already up-to-date
+                if !behind {
+                    *skipped_clean.lock().unwrap() += 1;
+                    return (repo_path.clone(), String::new());
+                }
 
-            // Pull latest changes
-            print!("🔄 Syncing: {} ... ", repo_path);
-            if pull_repo(repo_path) {
-                synced += 1;
-                println!("✅");
-                // Update cache: now clean and up-to-date
-                let branch = get_current_branch(repo_path);
-                set_cached_status(repo_path, true, false, branch);
-            } else {
-                println!("❌ Failed");
+                // Pull latest changes
+                if pull_repo(repo_path) {
+                    *synced.lock().unwrap() += 1;
+                    // Update cache: now clean and up-to-date
+                    set_cached_status(repo_path, true, false, branch);
+                    (repo_path.clone(), format!("🔄 Synced: {} ✅", repo_path))
+                } else {
+                    (
+                        repo_path.clone(),
+                        format!("🔄 Syncing: {} ... ❌ Failed", repo_path),
+                    )
+                }
+            })
+            .collect();
+
+        // Print results sequentially to avoid interleaved output
+        for (_, msg) in results {
+            if !msg.is_empty() {
+                println!("{}", msg);
             }
         }
 
         // Print summary
         println!();
         println!("Sync complete:");
-        println!("  ✅ Synced: {}", synced);
-        println!("  ⏸️  Skipped (dirty): {}", skipped_dirty);
-        println!("  ⏭️  Already up-to-date: {}", skipped_clean);
+        println!("  ✅ Synced: {}", *synced.lock().unwrap());
+        println!("  ⏸️  Skipped (dirty): {}", *skipped_dirty.lock().unwrap());
+        println!(
+            "  ⏭️  Already up-to-date: {}",
+            *skipped_clean.lock().unwrap()
+        );
     } else if current {
-        // Sync only current repository
+        // Sync only current repository (sequential - only one repo)
         match get_current_repo(repos) {
             Some(current_repo) => {
                 // Fetch latest remote info first
                 fetch_repo(&current_repo);
 
-                let (clean, behind, _) = get_repo_status(&current_repo);
+                let (clean, behind, branch) = get_repo_status(&current_repo);
 
                 if !clean {
                     println!("⏸️  Skipped (uncommitted changes): {}", current_repo);
@@ -381,7 +396,6 @@ pub fn sync_repos(repos: &[String], all: bool, current: bool) {
                 if pull_repo(&current_repo) {
                     println!("✅");
                     // Update cache: now clean and up-to-date
-                    let branch = get_current_branch(&current_repo);
                     set_cached_status(&current_repo, true, false, branch);
                 } else {
                     println!("❌ Failed");
