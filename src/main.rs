@@ -15,7 +15,7 @@ mod git;
 mod status_cache;
 mod ui;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 
 /// Command-line interface for the fmr application.
 ///
@@ -31,23 +31,6 @@ struct Cli {
 
     /// Optional search query (if no subcommand is used)
     query: Option<String>,
-}
-
-/// Target specification for sync and checkout operations.
-///
-/// This struct uses clap's grouping feature to ensure exactly one of
-/// `--all` or `--current` is specified, providing clear error messages
-/// when neither or both flags are provided.
-#[derive(Args)]
-#[group(required = true, multiple = false)]
-struct SyncTarget {
-    /// Sync/checkout all repositories
-    #[arg(long)]
-    all: bool,
-
-    /// Sync/checkout current repository
-    #[arg(long)]
-    current: bool,
 }
 
 /// Available subcommands for the fmr CLI.
@@ -84,27 +67,6 @@ enum Commands {
     /// Add, remove, or list directories that fmr will scan for repositories.
     #[command(subcommand)]
     Locations(LocationCommands),
-
-    /// Sync repositories by pulling latest changes from remote.
-    ///
-    /// Only syncs repositories that are behind remote (clean repositories only).
-    /// Repositories with uncommitted changes are automatically skipped.
-    Sync {
-        #[command(flatten)]
-        target: SyncTarget,
-    },
-
-    /// Checkout a branch across repositories.
-    ///
-    /// Attempts to switch to the specified branch in all repositories.
-    /// Skips repositories where the branch doesn't exist or has uncommitted changes.
-    Checkout {
-        #[command(flatten)]
-        target: SyncTarget,
-
-        /// Branch name to checkout (e.g., "main", "develop")
-        branch: String,
-    },
 }
 
 #[derive(Subcommand)]
@@ -176,16 +138,6 @@ fn main() {
             LocationCommands::Remove { path } => commands::remove_location(path.clone()),
             LocationCommands::List => commands::list_locations(),
         },
-
-        Some(Commands::Sync { target }) => {
-            let repos = cache::load_or_create_cache();
-            commands::sync_repos(&repos, target.all, target.current);
-        }
-
-        Some(Commands::Checkout { target, branch }) => {
-            let repos = cache::load_or_create_cache();
-            commands::checkout_repos(&repos, target.all, target.current, &branch);
-        }
 
         None => {
             let repos = cache::load_or_create_cache();
