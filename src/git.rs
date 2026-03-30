@@ -80,7 +80,10 @@ fn is_repo_clean_raw(path: &str) -> bool {
 fn is_behind_remote_raw(path: &str) -> bool {
     let branch = match get_current_branch(path) {
         Some(b) => b,
-        None => return false,
+        None => {
+            eprintln!("Warning: Could not determine current branch for {}", path);
+            return false;
+        }
     };
 
     // Query rev-list for commit counts between local and remote
@@ -97,16 +100,33 @@ fn is_behind_remote_raw(path: &str) -> bool {
 
     match output {
         Ok(output) if output.status.success() => {
-            // Parse output: "behind\tahead"
+            // Parse output: "ahead\tbehind" (left=local commits not in origin, right=origin commits not in local)
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Some(tab_pos) = stdout.find('\t') {
-                let behind = &stdout[..tab_pos];
+                // Right side (after tab) shows commits in origin but not in local = behind count
+                let behind = &stdout[tab_pos + 1..];
                 behind.trim() != "0"
             } else {
+                eprintln!(
+                    "Warning: Unexpected git rev-list output format for {}: {:?}",
+                    path, stdout
+                );
                 false
             }
         }
-        _ => false,
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            eprintln!(
+                "Warning: git rev-list failed for {}: {}",
+                path,
+                stderr.trim()
+            );
+            false
+        }
+        Err(e) => {
+            eprintln!("Warning: Could not run git rev-list for {}: {}", path, e);
+            false
+        }
     }
 }
 
